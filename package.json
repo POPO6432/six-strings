@@ -7,10 +7,10 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "node server/local.js",
-    "build": "node scripts/build.js",
-    "start": "node server/local.js --built",
-    "test": "node --test tests/*.test.js"
+    "dev": "node scripts/shop.mjs dev",
+    "build": "vite build --outDir dist/client",
+    "start": "node scripts/shop.mjs start",
+    "test": "node scripts/shop.mjs test"
   },
   "dependencies": {
     "react": "19.3.1",

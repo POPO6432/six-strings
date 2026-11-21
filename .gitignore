@@ -4,3 +4,6 @@ data/
 .env*
 .DS_Store
 outputs/
+
+.venv/
+__pycache__/

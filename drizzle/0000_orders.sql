@@ -1,7 +1,0 @@
-CREATE TABLE IF NOT EXISTS orders (
-  id TEXT PRIMARY KEY,
-  request_key TEXT NOT NULL UNIQUE,
-  payload TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);

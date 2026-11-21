@@ -11,10 +11,10 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { products, findProduct, money, deliveryFee } from "./catalog.js";
-import { restore, change, subtotal } from "./cart.js";
+import { subtotal } from "./cart.js";
+import { Auth, Profile, request } from "./account.jsx";
 import "./style.css";
 
-const cartKey = "six-strings.cart.v1";
 const groups = ["Все товары", ...new Set(products.map((p) => p.category))];
 function Mark() {
   return (
@@ -118,7 +118,7 @@ function Home() {
     </>
   );
 }
-function Product({ item, add }) {
+function Product({ item, add, signedIn }) {
   const [variant, setVariant] = useState(item.variants[0]);
   return (
     <section className="wrap inner">
@@ -154,7 +154,7 @@ function Product({ item, add }) {
             className="button bright"
             onClick={() => add(item.id, variant)}
           >
-            Добавить в корзину
+            {signedIn ? "Добавить в корзину" : "Войти, чтобы добавить"}
           </button>
           <dl>
             {Object.entries(item.specs).map(([a, b]) => (
@@ -270,16 +270,7 @@ function Basket({ cart, adjust, dialog }) {
     </dialog>
   );
 }
-async function request(path, options) {
-  const res = await fetch(path, options);
-  const data = await res
-    .json()
-    .catch(() => ({ error: "Сервер временно недоступен." }));
-  if (!res.ok || data.error)
-    throw new Error(data.error || "Не удалось выполнить запрос.");
-  return data;
-}
-function Checkout({ cart, complete }) {
+function Checkout({ cart, user, post, complete }) {
   const [method, setMethod] = useState("pickup");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -295,15 +286,10 @@ function Checkout({ cart, complete }) {
     setBusy(true);
     setError("");
     try {
-      const order = await request("/api/orders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": attempt.current.key,
-        },
-        body,
+      const order = await post("/api/orders", JSON.parse(body), {
+        "Idempotency-Key": attempt.current.key,
       });
-      complete(cart);
+      await complete();
       navigate("/order/" + order.id, { replace: true });
     } catch (err) {
       setError(err.message);
@@ -322,12 +308,19 @@ function Checkout({ cart, complete }) {
           <h2>Контакты</h2>
           <label>
             Имя
-            <input name="name" required maxLength="100" autoComplete="name" />
+            <input
+              name="name"
+              defaultValue={user.name}
+              required
+              maxLength="100"
+              autoComplete="name"
+            />
           </label>
           <label>
             Электронная почта
             <input
               type="email"
+              defaultValue={user.email}
               name="email"
               required
               maxLength="200"
@@ -397,7 +390,7 @@ function Checkout({ cart, complete }) {
     </section>
   );
 }
-function Order() {
+function Order({ post }) {
   const { id } = useParams(),
     url = "/api/orders/" + id;
   const [order, setOrder] = useState(null),
@@ -422,7 +415,7 @@ function Order() {
     setBusy(true);
     setError("");
     try {
-      setOrder(await request(url + "/pay-demo", { method: "POST" }));
+      setOrder(await post(url + "/pay-demo", {}));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -471,28 +464,85 @@ function Order() {
     </section>
   );
 }
-function Shop() {
-  const [cart, setCart] = useState(() => {
-    try {
-      return restore(localStorage.getItem(cartKey));
-    } catch {
-      return [];
-    }
-  });
-  const dialog = useRef(null),
+function Shop({ session, save, refresh, updateCart }) {
+  const { user, cart, csrf } = session;
+  const dialog = useRef(null);
+  const navigate = useNavigate(),
     location = useLocation();
-  useEffect(() => {
-    try {
-      localStorage.setItem(cartKey, JSON.stringify(cart));
-    } catch {}
-  }, [cart]);
+  const [error, setError] = useState("");
+  const inFlight = useRef(false);
   useEffect(() => {
     if (!location.search.includes("catalog=")) window.scrollTo(0, 0);
   }, [location.pathname, location.search]);
-  function adjust(id, v, n) {
-    setCart((c) => change(c, id, v, n));
+
+  async function post(path, data, extraHeaders = {}) {
+    try {
+      return await request(path, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrf,
+          "X-Shop-User": user ? String(user.id) : "",
+          ...extraHeaders,
+        },
+        body: JSON.stringify(data),
+      });
+    } catch (err) {
+      if (
+        err.status === 403 ||
+        err.status === 409 ||
+        (user && err.status === 401)
+      )
+        await refresh();
+      throw err;
+    }
   }
-  const count = cart.reduce((s, l) => s + l.qty, 0);
+  function requireLogin() {
+    navigate("/account", {
+      state: { from: location.pathname + location.search },
+    });
+  }
+  async function adjust(id, variant, delta, open = false) {
+    if (!user) return requireLogin();
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setError("");
+    try {
+      const result = await post("/api/cart", { id, variant, delta });
+      updateCart(user.id, result.cart);
+      if (open && dialog.current && !dialog.current.open)
+        dialog.current.showModal();
+    } catch (err) {
+      dialog.current?.close();
+      setError(err.message);
+    } finally {
+      inFlight.current = false;
+    }
+  }
+  function changeLogin(next) {
+    save(next);
+    // Other tabs share the session cookie. Only a change notification goes into storage.
+    try {
+      localStorage.setItem("six-strings.auth-change", crypto.randomUUID());
+    } catch {}
+  }
+  async function authenticate(action, data) {
+    const next = await post("/api/auth/" + action, data);
+    changeLogin(next);
+    if (location.pathname === "/account" && location.state?.from) {
+      navigate(location.state.from, { replace: true });
+    }
+  }
+  async function signOut() {
+    try {
+      changeLogin(await post("/api/auth/logout", {}));
+      navigate("/", { replace: true });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+  const auth = <Auth submit={authenticate} />;
+  const count = cart.reduce((sum, row) => sum + row.qty, 0);
   return (
     <>
       <header>
@@ -504,9 +554,14 @@ function Shop() {
             <Link className="nav-cat" to="/?catalog=1">
               Каталог
             </Link>
+            <Link className="account-link" to="/account">
+              {user ? "Аккаунт" : "Войти"}
+            </Link>
             <button
               className="cart-trigger"
-              onClick={() => dialog.current.showModal()}
+              onClick={() =>
+                user ? dialog.current.showModal() : requireLogin()
+              }
             >
               <CartIcon /> Корзина <span>{count}</span>
             </button>
@@ -514,6 +569,11 @@ function Shop() {
         </div>
       </header>
       <Basket cart={cart} adjust={adjust} dialog={dialog} />
+      {error && (
+        <div role="alert" className="wrap">
+          {error}
+        </div>
+      )}
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -521,31 +581,34 @@ function Shop() {
             path="/product/:id"
             element={
               <ProductRoute
-                add={(id, v) => {
-                  adjust(id, v, 1);
-                  dialog.current.showModal();
-                }}
+                signedIn={Boolean(user)}
+                add={(id, v) => adjust(id, v, 1, true)}
               />
             }
           />
           <Route
+            path="/account"
+            element={user ? <Profile user={user} signOut={signOut} /> : auth}
+          />
+          <Route
             path="/checkout"
             element={
-              <Checkout
-                cart={cart}
-                complete={(submitted) =>
-                  setCart((current) =>
-                    submitted.reduce(
-                      (rest, line) =>
-                        change(rest, line.id, line.variant, -line.qty),
-                      current,
-                    ),
-                  )
-                }
-              />
+              user ? (
+                <Checkout
+                  cart={cart}
+                  user={user}
+                  post={post}
+                  complete={refresh}
+                />
+              ) : (
+                auth
+              )
             }
           />
-          <Route path="/order/:id" element={<Order />} />
+          <Route
+            path="/order/:id"
+            element={user ? <Order post={post} /> : auth}
+          />
           <Route path="*" element={<Empty title="Страница не найдена" />} />
         </Routes>
       </main>
@@ -560,8 +623,90 @@ function Shop() {
     </>
   );
 }
+
+function App() {
+  const [session, setSession] = useState(null),
+    [error, setError] = useState("");
+  const generation = useRef(0);
+  const cartVersion = useRef(0);
+  function save(next) {
+    generation.current++;
+    setError("");
+    setSession(next);
+  }
+  function updateCart(owner, cart) {
+    cartVersion.current++;
+    setSession((current) =>
+      current?.user?.id === owner ? { ...current, cart } : current,
+    );
+  }
+  async function refresh() {
+    const ticket = ++generation.current;
+    const snapshotVersion = cartVersion.current;
+    try {
+      const next = await request("/api/session");
+      if (ticket === generation.current) {
+        setError("");
+        setSession((current) =>
+          current?.user?.id === next.user?.id &&
+          current &&
+          snapshotVersion !== cartVersion.current
+            ? { ...next, cart: current.cart }
+            : next,
+        );
+      }
+    } catch (err) {
+      if (ticket === generation.current) {
+        setSession(null);
+        setError(err.message);
+      }
+    }
+  }
+  useEffect(() => {
+    refresh();
+    function sync(event) {
+      if (event.type === "storage") {
+        if (event.key !== "six-strings.auth-change") return;
+        setSession(null);
+        refresh();
+        return;
+      }
+      if (document.visibilityState !== "hidden") refresh();
+    }
+    window.addEventListener("storage", sync);
+    window.addEventListener("focus", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("focus", sync);
+    };
+  }, []);
+  if (!session)
+    return (
+      <main className="wrap inner">
+        {error ? (
+          <>
+            <p role="alert">{error}</p>
+            <button className="button dark" onClick={refresh}>
+              Повторить
+            </button>
+          </>
+        ) : (
+          <p>Открываем магазин…</p>
+        )}
+      </main>
+    );
+  return (
+    <Shop
+      key={session.user?.id ?? "guest"}
+      session={session}
+      updateCart={updateCart}
+      save={save}
+      refresh={refresh}
+    />
+  );
+}
 createRoot(document.getElementById("root")).render(
   <HashRouter>
-    <Shop />
+    <App />
   </HashRouter>,
 );

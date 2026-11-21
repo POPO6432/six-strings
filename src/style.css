@@ -605,3 +605,49 @@ small {
     transition: none;
   }
 }
+
+.account-page {
+  max-width: 640px;
+}
+.account-page h2 {
+  margin-top: 2rem;
+}
+.account-form,
+.account-form label {
+  display: grid;
+  gap: 0.45rem;
+}
+.account-form {
+  gap: 1rem;
+  margin: 1.5rem 0 1rem;
+  max-width: 28rem;
+}
+.account-form input {
+  width: 100%;
+  min-height: 45px;
+  border: 1px solid #aaa69f;
+  border-radius: 4px;
+  padding: 9px 12px;
+}
+.account-switch {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.account-link {
+  color: white;
+}
+@media (max-width: 390px) {
+  .nav.wrap {
+    width: 96%;
+  }
+  .nav nav {
+    gap: 8px;
+  }
+  .nav .mark {
+    font-size: 1rem;
+    gap: 3px;
+  }
+}
