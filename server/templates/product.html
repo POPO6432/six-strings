@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}
+  {{ product.name }}
+  · Шесть струн
+{% endblock %}
+{% block content %}
+  <section class="wrap inner">
+    <a class="back" href="/#catalog">К каталогу</a>
+    <div class="detail">
+      <img class="detail-photo" src="/images/{{ product.id }}.webp" alt="{{ product.name }}">
+      <div class="detail-info">
+        <div class="eyebrow">{{ product.category }}</div>
+        <h1>{{ product.name }}</h1>
+        <strong class="price">
+          {{ product.price }}
+          ₽
+        </strong>
+        <p>{{ product.description }}</p>
+        <form method="post" action="{% url 'cart' %}">
+          {% csrf_token %}
+          <input type="hidden" name="owner" value="{{ user.pk }}">
+          <input type="hidden" name="id" value="{{ product.id }}">
+          <input type="hidden" name="delta" value="1">
+          <fieldset>
+            <legend>{{ product.option }}</legend>
+            {% for v in product.variants %}
+              <label class="radio">
+                <input type="radio" name="variant" value="{{ v }}" {% if forloop.first %}checked{% endif %}>
+                {{ v }}
+              </label>
+            {% endfor %}
+          </fieldset>
+          {% if user.is_authenticated %}
+            <button class="button bright">Добавить в корзину</button>
+          {% else %}
+            <a class="button bright" href="{% url 'login' %}?next={{ request.path|urlencode }}">Войти, чтобы добавить</a>
+          {% endif %}
+        </form>
+        <dl>
+          {% for key,value in product.specs.items %}
+            <div>
+              <dt>{{ key }}</dt>
+              <dd>{{ value }}</dd>
+            </div>
+          {% endfor %}
+        </dl>
+      </div>
+    </div>
+  </section>
+{% endblock %}

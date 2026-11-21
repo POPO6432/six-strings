@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="wrap inner receipt">
+    <div class="eyebrow">Учебный магазин</div>
+    <h1>
+      {% if order.status == "pending" %}
+        Демо-оплата
+      {% else %}
+        Заказ оформлен
+      {% endif %}
+    </h1>
+    <p>
+      Заказ №
+      {{ order.id|stringformat:"s"|slice:":8"|upper }}
+      ·
+      {% if order.payload.method == "pickup" %}
+        Самовывоз
+      {% else %}
+        Доставка курьером
+      {% endif %}
+    </p>
+    <div class="totals">
+      <span>Сумма заказа</span>
+      <b>
+        {{ order.payload.total }}
+        ₽
+      </b>
+    </div>
+    {% if order.status == "pending" %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="owner" value="{{ user.pk }}">
+        <p>Деньги с карты не списываются.</p>
+        <button class="button bright">Подтвердить демо-оплату</button>
+      </form>
+    {% else %}
+      <p>Демонстрационная оплата подтверждена.</p>
+    {% endif %}
+    <a class="back" href="{% url 'profile' %}">Мои заказы</a>
+  </section>
+{% endblock %}

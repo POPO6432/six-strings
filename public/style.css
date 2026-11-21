@@ -211,7 +211,7 @@ p {
   flex-wrap: wrap;
   margin: 20px 0 25px;
 }
-.filters button {
+.filters a {
   border: 1px solid #cbc7bf;
   border-radius: 100px;
   background: transparent;
@@ -219,10 +219,10 @@ p {
   padding: 8px 14px;
   font-size: 0.92rem;
 }
-.filters button:hover {
+.filters a:hover {
   border-color: #34312d;
 }
-.filters button[aria-pressed="true"] {
+.filters a[aria-current="true"] {
   background: #24221e;
   color: white;
   border-color: #24221e;
@@ -568,7 +568,7 @@ small {
     gap: 6px;
     margin: 17px 0;
   }
-  .filters button {
+  .filters a {
     font-size: 0.875rem;
     padding: 7px 11px;
   }

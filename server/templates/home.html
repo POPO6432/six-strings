@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="hero">
+    <div class="hero-inner">
+      <span class="eyebrow orange">ЭЛЕКТРОГИТАРА</span>
+      <h1>
+        Volt
+        <br>
+        Classic S
+        <span>.</span>
+      </h1>
+      <p>
+        Три сингла. Корпус из ольхи.
+        <br>
+        Классический звук в вишнёвом цвете.
+      </p>
+      <a class="button bright" href="{% url 'product' 'volt' %}">Смотреть гитару</a>
+    </div>
+  </section>
+  <section class="catalog wrap" id="catalog">
+    <div class="section-heading">
+      <h2>Каталог</h2>
+      <span>
+        {{ products|length }}
+        из
+        {{ total }}
+      </span>
+    </div>
+    <nav class="filters" aria-label="Категории">
+      <a {% if not selected %}aria-current="true"{% endif %} href="/#catalog">Все товары</a>
+      {% for c in categories %}
+        <a {% if selected == c %}aria-current="true"{% endif %} href="?category={{ c|urlencode }}#catalog">{{ c }}</a>
+      {% endfor %}
+    </nav>
+    <div class="grid">
+      {% for p in products %}
+        <a class="card" href="{% url 'product' p.id %}">
+          <div class="photo">
+            <img src="/images/{{ p.id }}.webp" alt="{{ p.name }}" loading="lazy">
+          </div>
+          <div class="type">{{ p.category }}</div>
+          <h3>{{ p.name }}</h3>
+          <strong>
+            {{ p.price }}
+            ₽
+          </strong>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

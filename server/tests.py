@@ -100,3 +100,54 @@ class ShopTests(TestCase):
         self.assertEqual(CartItem.objects.get(user_id=self.a).qty, 1)
         self.change(self.alice, self.a, 1)
         self.assertEqual(checkout({**self.checkout, "method": "pickup"}).json()["total"], 900)
+
+
+class StorefrontTests(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=True)
+
+    def post_form(self, path, **fields):
+        fields["csrfmiddlewaretoken"] = self.client.cookies["csrftoken"].value
+        return self.client.post(path, fields)
+
+    def test_catalog_and_public_assets(self):
+        response = self.client.get("/", {"category": "Электрогитары"})
+        self.assertEqual([p["id"] for p in response.context["products"]], ["volt"])
+        self.assertNotContains(response, "<script")
+        self.assertContains(self.client.get("/product/volt/"), "Volt Classic S")
+        self.assertEqual(self.client.get("/style.css").status_code, 200)
+        self.assertEqual(self.client.get("/images/volt.webp").status_code, 200)
+        self.assertRedirects(self.client.get("/cart/"), "/login/?next=/cart/")
+
+    def test_private_cart_and_checkout_through_html_forms(self):
+        self.client.get("/register/")
+        def register(email):
+            result = self.post_form("/register/", name="Анна", email=email, password="guitarshop123")
+            self.assertRedirects(result, "/account/")
+            return get_user_model().objects.get(username=email).pk
+
+        alice = register("anna@example.org")
+        self.assertRedirects(self.post_form("/cart/", owner=alice, id="picks", variant="0,88 мм", delta=2), "/cart/")
+        self.assertRedirects(self.post_form("/logout/", owner=alice), "/")
+        boris = register("boris@example.org")
+        self.assertContains(self.client.get("/cart/"), "Корзина пока пуста")
+        self.assertEqual(self.post_form("/cart/", owner=alice, id="picks", variant="0,88 мм", delta=2).status_code, 409)
+        self.post_form("/logout/", owner=boris)
+        self.assertRedirects(self.post_form("/login/", email="anna@example.org", password="guitarshop123"), "/account/")
+        response = self.client.get("/checkout/?method=courier")
+        self.assertEqual(response.context["total"], 1400)
+        self.assertNotContains(response, "<script")
+        fields = dict(owner=alice, snapshot=response.context["snapshot"], name="Анна", email="anna@example.org")
+        self.assertEqual(self.post_form("/checkout/", **fields).status_code, 400)
+        fields["address"] = "Тестовая 1"
+        receipt_path = self.post_form("/checkout/", **fields).url
+        self.assertRedirects(self.post_form("/checkout/", **fields), receipt_path)
+        self.assertEqual(Order.objects.count(), 1)
+        self.assertContains(self.client.get("/cart/"), "Корзина пока пуста")
+        self.assertRedirects(self.post_form(receipt_path, owner=alice), receipt_path)
+        self.assertContains(self.client.get(receipt_path), "Заказ оформлен")
+        self.post_form("/logout/", owner=alice)
+        self.post_form("/login/", email="boris@example.org", password="guitarshop123")
+        self.assertEqual(self.client.get(receipt_path).status_code, 404)
+        self.assertEqual(self.post_form(receipt_path, owner=boris).status_code, 404)
+        self.assertContains(self.client.get("/account/"), "Заказов пока нет")

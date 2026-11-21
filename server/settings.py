@@ -6,7 +6,16 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
-CLIENT_DIR = BASE_DIR / "dist" / "client"
+PUBLIC_DIR = BASE_DIR / "public"
+LOGIN_URL = "/login/"
+TEMPLATES = [{
+    "BACKEND": "django.template.backends.django.DjangoTemplates",
+    "APP_DIRS": True,
+    "OPTIONS": {"context_processors": [
+        "django.template.context_processors.request",
+        "django.contrib.auth.context_processors.auth",
+    ]},
+}]
 
 # Keep the local signing key between restarts and outside version control.
 def local_secret():

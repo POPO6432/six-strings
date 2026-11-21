@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="wrap inner account-page">
+    <a class="back" href="/#catalog">К каталогу</a>
+    <h1>Корзина</h1>
+    {% for l in lines %}
+      <div class="line">
+        <img src="/images/{{ l.id }}.webp" alt="">
+        <div>
+          <b>{{ l.product.name }}</b>
+          <small>{{ l.variant }}</small>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="owner" value="{{ user.pk }}">
+            <input type="hidden" name="id" value="{{ l.id }}">
+            <input type="hidden" name="variant" value="{{ l.variant }}">
+            <div class="stepper">
+              <button name="delta" value="-1" aria-label="Уменьшить количество">−</button>
+              <span>{{ l.qty }}</span>
+              <button name="delta" value="1" aria-label="Увеличить количество" {% if l.qty >= 99 %}disabled{% endif %}>
+                +
+              </button>
+            </div>
+            <button class="text-button" name="delta" value="-{{ l.qty }}">Удалить</button>
+          </form>
+        </div>
+        <b>
+          {{ l.sum }}
+          ₽
+        </b>
+      </div>
+    {% empty %}
+      <p>Корзина пока пуста.</p>
+    {% endfor %}
+    {% if lines %}
+      <div class="totals">
+        <span>Итого</span>
+        <b>
+          {{ total }}
+          ₽
+        </b>
+      </div>
+      <a class="button bright" href="{% url 'checkout' %}">Оформить заказ</a>
+    {% endif %}
+  </section>
+{% endblock %}

@@ -15,7 +15,7 @@ from django.views.decorators.http import require_http_methods
 from .models import CartItem, Order
 
 User = get_user_model()
-PRODUCTS = {p["id"]: p for p in json.loads((settings.BASE_DIR / "src/products.json").read_text())}
+PRODUCTS = {p["id"]: p for p in json.loads((settings.BASE_DIR / "server/products.json").read_text())}
 
 
 class Invalid(Exception):
@@ -101,7 +101,11 @@ def session(request):
 
 @endpoint("POST")
 def account(request, action):
-    data = body(request)
+    authenticate_account(request, action, body(request))
+    return JsonResponse(session_data(request), status=201 if action == "register" else 200)
+
+
+def authenticate_account(request, action, data):
     email = email_field(data)
     password = data.get("password")
     if not isinstance(password, str) or not 1 <= len(password) <= 128:
@@ -120,7 +124,6 @@ def account(request, action):
         if user is None:
             raise Invalid("Неверный email или пароль.", 401)
     login(request, user)
-    return JsonResponse(session_data(request), status=201 if action == "register" else 200)
 
 
 @endpoint("POST", private=True)
@@ -138,21 +141,24 @@ def product_variant(data):
 
 
 @endpoint("POST", private=True)
-@transaction.atomic
 def change_cart(request):
-    data = body(request)
+    adjust_cart(request.user, body(request))
+    return JsonResponse({"cart": cart_rows(request.user)})
+
+
+@transaction.atomic
+def adjust_cart(user, data):
     product = product_variant(data)
     delta = data.get("delta")
     if type(delta) is not int or not 1 <= abs(delta) <= 99:
         raise Invalid("Некорректное изменение количества.")
-    key = dict(user=request.user, product_id=product["id"], variant=data["variant"])
+    key = dict(user=user, product_id=product["id"], variant=data["variant"])
     line = CartItem.objects.filter(**key).first()
     qty = min(99, (line.qty if line else 0) + delta)
     if qty > 0:
         CartItem.objects.update_or_create(**key, defaults={"qty": qty})
     elif line:
         line.delete()
-    return JsonResponse({"cart": cart_rows(request.user)})
 
 
 def order_data(data):
@@ -190,19 +196,24 @@ def orders(request):
         key = uuid.UUID(request.headers.get("Idempotency-Key", ""))
     except ValueError:
         raise Invalid("Некорректный ключ заказа.")
-    payload = order_data(body(request))
+    order = create_order(request.user, key, body(request))
+    return JsonResponse(receipt(order), status=201)
+
+
+def create_order(user, key, data):
+    payload = order_data(data)
     with transaction.atomic():
-        existing = Order.objects.filter(user=request.user, request_key=key).first()
+        existing = Order.objects.filter(user=user, request_key=key).first()
         if existing:
             if existing.payload != payload:
                 raise Invalid("Данные заказа изменились.", 409)
-            return JsonResponse(receipt(existing), status=201)
+            return existing
         snapshot = [{k: item[k] for k in ("id", "variant", "qty")} for item in payload["items"]]
-        if cart_rows(request.user) != snapshot:
+        if cart_rows(user) != snapshot:
             raise Invalid("Корзина изменилась. Обновите страницу и проверьте заказ.", 409)
-        order = Order.objects.create(user=request.user, request_key=key, payload=payload)
-        CartItem.objects.filter(user=request.user).delete()
-    return JsonResponse(receipt(order), status=201)
+        order = Order.objects.create(user=user, request_key=key, payload=payload)
+        CartItem.objects.filter(user=user).delete()
+    return order
 
 
 @endpoint("GET", private=True)
@@ -214,12 +225,16 @@ def detail(request, order_id):
 
 
 @endpoint("POST", private=True)
-@transaction.atomic
 def pay(request, order_id):
-    order = Order.objects.filter(pk=order_id, user=request.user).first()
+    return JsonResponse(receipt(pay_order(request.user, order_id)))
+
+
+@transaction.atomic
+def pay_order(user, order_id):
+    order = Order.objects.filter(pk=order_id, user=user).first()
     if not order:
         raise Invalid("Заказ не найден.", 404)
     if order.status == "pending":
         order.status = "demo_paid"
         order.save(update_fields=["status"])
-    return JsonResponse(receipt(order))
+    return order

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="wrap inner">
+    <h1>Не удалось выполнить действие</h1>
+    <p role="alert">{{ message }}</p>
+    <a class="back" href="{% url 'cart' %}">Открыть корзину</a>
+  </section>
+{% endblock %}

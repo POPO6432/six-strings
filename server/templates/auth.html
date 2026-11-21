@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="wrap inner account-page">
+    <h1>
+      {% if register %}
+        Регистрация
+      {% else %}
+        Вход в магазин
+      {% endif %}
+    </h1>
+    <p>В аккаунте сохраняются ваша корзина и заказы.</p>
+    <form class="account-form" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ following }}">
+      {% if register %}
+        <label>
+          Имя
+          <input name="name" required maxlength="100" autocomplete="given-name" value="{{ values.name }}">
+        </label>
+      {% endif %}
+      <label>
+        Электронная почта
+        <input type="email" name="email" required maxlength="150" autocomplete="username" value="{{ values.email }}">
+      </label>
+      <label>
+        Пароль
+        <input type="password" name="password" required maxlength="128" {% if register %}minlength="8" autocomplete="new-password"{% else %}autocomplete="current-password"{% endif %}>
+      </label>
+      {% if register %}
+        <small>От 8 до 128 символов.</small>
+      {% endif %}
+      {% if error %}
+        <p role="alert">{{ error }}</p>
+      {% endif %}
+      <button class="button bright">
+        {% if register %}
+          Создать аккаунт
+        {% else %}
+          Войти
+        {% endif %}
+      </button>
+    </form>
+    {% if register %}
+      <a class="account-switch" href="{% url 'login' %}?next={{ following|urlencode }}">Уже есть аккаунт? Войти</a>
+    {% else %}
+      <a class="account-switch" href="{% url 'register' %}?next={{ following|urlencode }}">Создать новый аккаунт</a>
+    {% endif %}
+  </section>
+{% endblock %}

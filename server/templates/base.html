@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>
+      {% block title %}
+        Шесть струн
+      {% endblock %}
+    </title>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="icon" href="/pick.svg">
+  </head>
+  <body>
+    <div id="root">
+      <header>
+        <div class="wrap nav">
+          <a href="/" aria-label="Шесть струн — главная">
+            <span class="mark">
+              <img src="/pick.svg" alt="">
+              ШЕСТЬ СТРУН
+            </span>
+          </a>
+          <nav>
+            <a class="nav-cat" href="/#catalog">Каталог</a>
+            {% if user.is_authenticated %}
+              <a class="account-link" href="{% url 'profile' %}">Аккаунт</a>
+            {% else %}
+              <a class="account-link" href="{% url 'login' %}">Войти</a>
+            {% endif %}
+            <a class="cart-trigger" href="{% url 'cart' %}">
+              Корзина
+              <span>{{ cart_count }}</span>
+            </a>
+          </nav>
+        </div>
+      </header>
+      <main>
+        {% block content %}
+        {% endblock %}
+      </main>
+      <footer>
+        <div class="wrap">
+          <a href="/" class="mark">
+            <img src="/pick.svg" alt="">
+            ШЕСТЬ СТРУН
+          </a>
+          <span>Учебный магазин гитар и оборудования</span>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

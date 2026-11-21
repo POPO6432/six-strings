@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="wrap inner account-page">
+    <h1>Мой аккаунт</h1>
+    <p>
+      {{ user.first_name }}
+      ·
+      {{ user.email }}
+    </p>
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <input type="hidden" name="owner" value="{{ user.pk }}">
+      <button class="account-switch">Выйти из аккаунта</button>
+    </form>
+    <h2>Мои заказы</h2>
+    {% for o in orders %}
+      <a class="summary-row" href="{% url 'order' o.id %}">
+        <span>
+          Заказ №
+          {{ o.id|stringformat:"s"|slice:":8"|upper }}
+          <small>
+            {% if o.status == "pending" %}
+              Ожидает демо-оплаты
+            {% else %}
+              Демо-оплата подтверждена
+            {% endif %}
+          </small>
+        </span>
+        <b>
+          {{ o.payload.total }}
+          ₽
+        </b>
+      </a>
+    {% empty %}
+      <p>Заказов пока нет.</p>
+    {% endfor %}
+  </section>
+{% endblock %}
