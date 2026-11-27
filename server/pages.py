@@ -14,6 +14,7 @@ from .models import CartItem, Order
 from .views import PRODUCTS, Invalid, adjust_cart, authenticate_account, cart_rows, create_order, pay_order
 
 
+# Общий счётчик корзины для всех страниц
 def page(request, template, status=200, **context):
     count = 0
     if request.user.is_authenticated:
@@ -23,6 +24,7 @@ def page(request, template, status=200, **context):
     return response
 
 
+# Проверяем, что в открытой форме тот же аккаунт
 def owner_matches(request):
     return request.POST.get("owner") == str(request.user.pk)
 
@@ -31,6 +33,7 @@ def problem(request, message, status=400):
     return page(request, "problem.html", message=message, status=status)
 
 
+# GET — каталог и фильтр по категории
 @require_GET
 def home(request):
     products = list(PRODUCTS.values())
@@ -43,6 +46,7 @@ def home(request):
     return page(request, "home.html", products=products, categories=categories, selected=selected, total=len(PRODUCTS))
 
 
+# GET — карточка выбранного товара
 @require_GET
 def product(request, product_id):
     item = PRODUCTS.get(product_id)
@@ -51,6 +55,7 @@ def product(request, product_id):
     return page(request, "product.html", product=item)
 
 
+# GET — форма входа или регистрации, POST — отправка данных
 @require_http_methods(["GET", "POST"])
 def auth(request, action):
     following = request.POST.get("next", request.GET.get("next", ""))
@@ -70,12 +75,14 @@ def auth(request, action):
                 error=message, values=request.POST, status=status)
 
 
+# GET — просмотр профиля и заказов
 @login_required
 @require_GET
 def profile(request):
     return page(request, "profile.html", orders=Order.objects.filter(user=request.user).order_by("-created_at"))
 
 
+# POST — выход из аккаунта
 @login_required
 @require_POST
 def leave(request):
@@ -85,6 +92,7 @@ def leave(request):
     return redirect("home")
 
 
+# Расчёт стоимости корзины
 def basket(rows):
     lines = []
     for row in rows:
@@ -93,6 +101,7 @@ def basket(rows):
     return lines, sum(line["sum"] for line in lines)
 
 
+# GET — просмотр корзины, POST — изменение количества
 @login_required
 @require_http_methods(["GET", "POST"])
 def cart(request):
@@ -111,6 +120,7 @@ def cart(request):
     return page(request, "cart.html", lines=lines, total=total)
 
 
+# GET — форма оформления, POST — создание заказа
 @login_required
 @require_http_methods(["GET", "POST"])
 def checkout(request):
@@ -138,6 +148,7 @@ def checkout(request):
     rows = cart_rows(request.user)
     lines, subtotal = basket(rows)
     method = "courier" if method == "courier" else "pickup"
+    # Подписываем состав корзины и способ получения
     token = signing.dumps({"user": request.user.pk, "key": str(uuid.uuid4()),
                            "items": rows, "method": method}, salt="shop.checkout")
     return page(request, "checkout.html", lines=lines, method=method, values=values,
@@ -145,6 +156,7 @@ def checkout(request):
                 error=message, status=status)
 
 
+# GET — просмотр заказа, POST — оплата заказа
 @login_required
 @require_http_methods(["GET", "POST"])
 def order(request, order_id):
@@ -156,5 +168,6 @@ def order(request, order_id):
         except Invalid as exc:
             return problem(request, str(exc), exc.status)
         return redirect("order", order_id=order_id)
+    # Заказ доступен только его владельцу
     purchase = get_object_or_404(Order, pk=order_id, user=request.user)
     return page(request, "order.html", order=purchase)
