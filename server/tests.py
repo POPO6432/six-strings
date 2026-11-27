@@ -4,6 +4,7 @@ from django.test import Client, TestCase
 from .models import CartItem, Order
 
 
+# Проверяем JSON API на отдельной тестовой базе.
 class ShopTests(TestCase):
     password = "guitar-practice-2026"
 
@@ -28,6 +29,7 @@ class ShopTests(TestCase):
     def change(self, client, owner, delta, variant="0,88 мм"):
         return self.send(client, "/api/cart", {"id": "picks", "variant": variant, "delta": delta}, owner)
 
+    # После смены аккаунта покупатель видит только свою корзину.
     def test_login_logout_and_account_scoped_cart(self):
         self.change(self.alice, self.a, 2)
         self.assertEqual(self.bob.get("/api/session").json()["cart"], [])
@@ -46,6 +48,7 @@ class ShopTests(TestCase):
         credentials["email"] = "alice@example.org"
         self.assertEqual(self.send(self.alice, "/api/auth/login", credentials).json()["cart"], [self.line])
 
+    # Проверяем токен формы, адрес почты и пароль.
     def test_registration_csrf_and_login_checks(self):
         form = {"email": "ALICE@example.org", "name": "А", "password": self.password}
         self.assertEqual(self.alice.post("/api/auth/register", form, content_type="application/json").status_code, 403)
@@ -54,6 +57,7 @@ class ShopTests(TestCase):
         self.assertEqual(self.send(self.alice, "/api/auth/register", {**form,"password":"123"}).status_code, 400)
         self.assertEqual(self.send(self.alice, "/api/auth/login", {**form,"password":"wrong"}).status_code, 401)
 
+    # Разные варианты товара можно изменять независимо.
     def test_cart_validation_variants_and_independent_removal(self):
         self.change(self.alice, self.a, 2)
         self.change(self.alice, self.a, 99)
@@ -65,6 +69,7 @@ class ShopTests(TestCase):
         self.change(self.alice, self.a, -99)
         self.assertEqual(self.bob.get("/api/session").json()["cart"][0]["qty"], 1)
 
+    # Повторная отправка сохраняет один заказ с серверной ценой.
     def test_checkout_price_retries_and_private_payment(self):
         self.change(self.alice, self.a, 2)
         self.change(self.bob, self.b, 1)
@@ -89,6 +94,7 @@ class ShopTests(TestCase):
             self.assertEqual(self.send(self.alice, path+"/pay-demo", {}, self.a).json()["status"], "demo_paid")
         self.assertNotIn("email", self.alice.get(path).json())
 
+    # Ошибка оформления должна сохранить товары в корзине.
     def test_invalid_and_stale_orders_leave_cart_untouched(self):
         self.change(self.alice, self.a, 1)
         def checkout(data):
@@ -102,6 +108,7 @@ class ShopTests(TestCase):
         self.assertEqual(checkout({**self.checkout, "method": "pickup"}).json()["total"], 900)
 
 
+# Имитируем действия покупателя через обычные HTML-формы.
 class StorefrontTests(TestCase):
     def setUp(self):
         self.client = Client(enforce_csrf_checks=True)
@@ -110,6 +117,7 @@ class StorefrontTests(TestCase):
         fields["csrfmiddlewaretoken"] = self.client.cookies["csrftoken"].value
         return self.client.post(path, fields)
 
+    # Проверяем фильтр каталога и загрузку изображений и стилей.
     def test_catalog_and_public_assets(self):
         response = self.client.get("/", {"category": "Электрогитары"})
         self.assertEqual([p["id"] for p in response.context["products"]], ["volt"])
@@ -119,6 +127,7 @@ class StorefrontTests(TestCase):
         self.assertEqual(self.client.get("/images/volt.webp").status_code, 200)
         self.assertRedirects(self.client.get("/cart/"), "/login/?next=/cart/")
 
+    # Два покупателя проходят вход, работу с корзиной и оформление.
     def test_private_cart_and_checkout_through_html_forms(self):
         self.client.get("/register/")
         def register(email):

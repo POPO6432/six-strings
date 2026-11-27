@@ -15,9 +15,11 @@ from django.views.decorators.http import require_http_methods
 from .models import CartItem, Order
 
 User = get_user_model()
+# Каталог и цены загружаются из products.json по коду товара.
 PRODUCTS = {p["id"]: p for p in json.loads((settings.BASE_DIR / "server/products.json").read_text())}
 
 
+# Ошибка проверки содержит сообщение и HTTP-статус для ответа.
 class Invalid(Exception):
     def __init__(self, message, status=400):
         super().__init__(message)
@@ -32,6 +34,7 @@ def csrf_failure(request, reason=""):
     return error("Сессия изменилась. Обновите страницу.", 403)
 
 
+# Общая проверка метода запроса и доступа к закрытым адресам API.
 def endpoint(*methods, private=False):
     """Check the logged-in session before handing a request to a shop operation."""
     def decorate(fn):
@@ -52,6 +55,7 @@ def endpoint(*methods, private=False):
     return decorate
 
 
+# Читаем JSON из тела запроса и проверяем его формат.
 def body(request):
     if request.content_type != "application/json":
         raise Invalid("Ожидается запрос JSON.", 415)
@@ -64,6 +68,7 @@ def body(request):
     return data
 
 
+# Проверяем обязательное текстовое поле и убираем пробелы по краям.
 def field(data, key, limit):
     value = data.get(key)
     if not isinstance(value, str) or not value.strip() or len(value.strip()) > limit:
@@ -71,6 +76,7 @@ def field(data, key, limit):
     return value.strip()
 
 
+# Проверяем формат почты и приводим адрес к нижнему регистру.
 def email_field(data, limit=150):
     email = field(data, "email", limit).lower()
     try:
@@ -80,11 +86,13 @@ def email_field(data, limit=150):
     return email
 
 
+# Выбираем только позиции корзины текущего покупателя.
 def cart_rows(user):
     return [{"id": line.product_id, "variant": line.variant, "qty": line.qty}
             for line in CartItem.objects.filter(user=user).order_by("pk")]
 
 
+# Гость получает пустую корзину, вошедший пользователь — свою.
 def session_data(request):
     token = get_token(request)
     if not request.user.is_authenticated:
@@ -105,6 +113,7 @@ def account(request, action):
     return JsonResponse(session_data(request), status=201 if action == "register" else 200)
 
 
+# При регистрации создаём аккаунт, при входе проверяем пароль.
 def authenticate_account(request, action, data):
     email = email_field(data)
     password = data.get("password")
@@ -123,6 +132,7 @@ def authenticate_account(request, action, data):
         user = authenticate(request, username=email, password=password)
         if user is None:
             raise Invalid("Неверный email или пароль.", 401)
+    # Связываем успешный вход с сессией браузера.
     login(request, user)
 
 
@@ -132,6 +142,7 @@ def sign_out(request):
     return JsonResponse(session_data(request))
 
 
+# Проверяем, что выбранный вариант есть у этого товара.
 def product_variant(data):
     product_id, variant = data.get("id"), data.get("variant")
     product = PRODUCTS.get(product_id) if isinstance(product_id, str) else None
@@ -146,6 +157,7 @@ def change_cart(request):
     return JsonResponse({"cart": cart_rows(request.user)})
 
 
+# В одной транзакции изменяем количество или удаляем позицию.
 @transaction.atomic
 def adjust_cart(user, data):
     product = product_variant(data)
@@ -161,6 +173,7 @@ def adjust_cart(user, data):
         line.delete()
 
 
+# Пересчитываем сумму по ценам каталога с учётом доставки.
 def order_data(data):
     method = data.get("method")
     if method not in ("pickup", "courier"):
@@ -182,6 +195,7 @@ def order_data(data):
                 items=items, total=sum(i["qty"] * i["price"] for i in items) + (500 if method == "courier" else 0))
 
 
+# Для квитанции выбираем номер, статус, позиции, сумму и способ получения.
 def receipt(order):
     return dict(id=order.pk, status=order.status, total=order.payload["total"],
                 method=order.payload["method"], items=order.payload["items"])
@@ -200,15 +214,18 @@ def orders(request):
     return JsonResponse(receipt(order), status=201)
 
 
+# Сохраняем заказ и очищаем корзину одной транзакцией.
 def create_order(user, key, data):
     payload = order_data(data)
     with transaction.atomic():
+        # При повторной отправке ищем заказ по владельцу и ключу.
         existing = Order.objects.filter(user=user, request_key=key).first()
         if existing:
             if existing.payload != payload:
                 raise Invalid("Данные заказа изменились.", 409)
             return existing
         snapshot = [{k: item[k] for k in ("id", "variant", "qty")} for item in payload["items"]]
+        # Перед записью сверяем состав заказа с текущей корзиной.
         if cart_rows(user) != snapshot:
             raise Invalid("Корзина изменилась. Обновите страницу и проверьте заказ.", 409)
         order = Order.objects.create(user=user, request_key=key, payload=payload)
@@ -229,6 +246,7 @@ def pay(request, order_id):
     return JsonResponse(receipt(pay_order(request.user, order_id)))
 
 
+# Подтверждаем учебную оплату только у заказа этого покупателя.
 @transaction.atomic
 def pay_order(user, order_id):
     order = Order.objects.filter(pk=order_id, user=user).first()

@@ -10,10 +10,12 @@ class Migration(migrations.Migration):
 
     initial = True
 
+    # Перед созданием корзин и заказов нужна таблица пользователей.
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
+    # Эти операции создают таблицы и ограничения при первом migrate.
     operations = [
         migrations.CreateModel(
             name='CartItem',

@@ -4,10 +4,12 @@ import tempfile
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Здесь хранятся база магазина и локальный ключ подписи.
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 PUBLIC_DIR = BASE_DIR / "public"
 LOGIN_URL = "/login/"
+# Django ищет HTML в папках templates установленных приложений.
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
     "APP_DIRS": True,
@@ -32,6 +34,7 @@ def local_secret():
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or local_secret()
 DEBUG = False
+# Адреса, по которым сервер принимает запросы.
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
 CSRF_TRUSTED_ORIGINS = []
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = bool(os.environ.get("CODESPACES"))
@@ -42,6 +45,7 @@ if os.environ.get("CODESPACE_NAME"):
     CSRF_TRUSTED_ORIGINS.append("https://" + host)
 ROOT_URLCONF = "server.urls"
 INSTALLED_APPS = ["django.contrib.auth", "django.contrib.contenttypes", "django.contrib.sessions", "server"]
+# Эти компоненты проверяют формы и определяют пользователя по сессии.
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -49,6 +53,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+# Для SQLite указываем драйвер и путь к файлу базы.
 DATABASES = {"default": {
     "ENGINE": "django.db.backends.sqlite3",
     "NAME": os.environ.get("SHOP_DATABASE") or DATA_DIR / "shop.sqlite",
